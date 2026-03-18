@@ -1,0 +1,1077 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Workshop Sentiment Analyzer</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root {
+  --bg: #080a0f;
+  --surface: #0f1219;
+  --surface2: #161b26;
+  --surface3: #1e2535;
+  --border: #222840;
+  --border2: #2d3450;
+  --text: #e4e8f4;
+  --muted: #5a6280;
+  --accent: #ff6b2b;
+  --accent2: #ff8f5a;
+  --green: #22d3a0;
+  --blue: #3b82f6;
+
+  --cat1: #ef4444;
+  --cat2: #3b82f6;
+  --cat3: #f59e0b;
+  --cat4: #ec4899;
+  --cat5: #8b5cf6;
+  --cat6: #06b6d4;
+  --cat7: #22d3a0;
+  --cat8: #ff6b2b;
+  --cat9: #a3e635;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Syne', sans-serif;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* Ambient grid background */
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  background-image:
+    linear-gradient(var(--border) 1px, transparent 1px),
+    linear-gradient(90deg, var(--border) 1px, transparent 1px);
+  background-size: 40px 40px;
+  opacity: 0.25;
+  pointer-events: none; z-index: 0;
+}
+
+body::after {
+  content: '';
+  position: fixed; inset: 0;
+  background: radial-gradient(ellipse 80% 50% at 50% -10%, rgba(255,107,43,0.12), transparent);
+  pointer-events: none; z-index: 0;
+}
+
+/* ====== SHARED ====== */
+.page { position: relative; z-index: 1; }
+
+/* ====== UPLOAD PAGE ====== */
+#uploadPage {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 1.5rem;
+}
+
+.logo-area { text-align: center; margin-bottom: 3rem; }
+.logo-tag {
+  display: inline-flex; align-items: center; gap: 0.5rem;
+  background: rgba(255,107,43,0.1); border: 1px solid rgba(255,107,43,0.3);
+  color: var(--accent); font-family: 'JetBrains Mono', monospace;
+  font-size: 0.7rem; letter-spacing: 0.2em; padding: 0.4rem 1rem;
+  border-radius: 100px; margin-bottom: 1.5rem; text-transform: uppercase;
+}
+.logo-tag::before { content: '◆'; font-size: 0.5rem; }
+
+h1.hero {
+  font-size: clamp(2.5rem, 6vw, 4.5rem);
+  font-weight: 800; line-height: 1.0;
+  background: linear-gradient(135deg, var(--text) 0%, var(--accent2) 60%, var(--accent) 100%);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 0.8rem;
+}
+.hero-sub {
+  color: var(--muted); font-family: 'JetBrains Mono', monospace;
+  font-size: 0.82rem; line-height: 1.6;
+}
+
+.upload-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;
+  width: 100%; max-width: 820px; margin-bottom: 2rem;
+}
+@media (max-width: 600px) { .upload-grid { grid-template-columns: 1fr; } }
+
+.drop-zone {
+  background: var(--surface); border: 2px dashed var(--border2);
+  border-radius: 16px; padding: 2.5rem 2rem; text-align: center;
+  cursor: pointer; transition: all 0.25s; position: relative;
+  overflow: hidden;
+}
+.drop-zone::before {
+  content: ''; position: absolute; inset: 0;
+  background: radial-gradient(ellipse at 50% 100%, rgba(255,107,43,0.08), transparent 70%);
+  opacity: 0; transition: opacity 0.3s;
+}
+.drop-zone:hover, .drop-zone.dragover { border-color: var(--accent); }
+.drop-zone:hover::before, .drop-zone.dragover::before { opacity: 1; }
+.drop-zone.filled { border-color: var(--green); border-style: solid; }
+.drop-zone.filled::before { background: radial-gradient(ellipse at 50% 100%, rgba(34,211,160,0.08), transparent 70%); opacity: 1; }
+
+.dz-icon { font-size: 2.5rem; margin-bottom: 1rem; display: block; }
+.dz-title { font-size: 1rem; font-weight: 700; margin-bottom: 0.4rem; }
+.dz-sub { font-size: 0.72rem; color: var(--muted); font-family: 'JetBrains Mono', monospace; }
+.dz-accepted { font-size: 0.65rem; color: var(--muted); margin-top: 0.5rem; font-family: 'JetBrains Mono', monospace; }
+.dz-filename {
+  margin-top: 1rem; padding: 0.5rem 1rem; background: rgba(34,211,160,0.1);
+  border: 1px solid rgba(34,211,160,0.3); border-radius: 8px;
+  color: var(--green); font-family: 'JetBrains Mono', monospace; font-size: 0.72rem;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+input[type=file] { display: none; }
+
+.analyze-btn {
+  display: flex; align-items: center; justify-content: center; gap: 0.8rem;
+  background: linear-gradient(135deg, var(--accent), #e85a1a);
+  color: #fff; border: none; border-radius: 12px;
+  font-family: 'Syne', sans-serif; font-size: 1rem; font-weight: 700;
+  padding: 1rem 3rem; cursor: pointer; transition: all 0.2s;
+  letter-spacing: 0.03em; box-shadow: 0 8px 30px rgba(255,107,43,0.3);
+}
+.analyze-btn:hover { transform: translateY(-2px); box-shadow: 0 12px 40px rgba(255,107,43,0.45); }
+.analyze-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+.analyze-btn .arrow { transition: transform 0.2s; }
+.analyze-btn:hover .arrow { transform: translateX(4px); }
+
+.upload-note {
+  margin-top: 1.5rem; color: var(--muted);
+  font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; text-align: center;
+}
+
+/* ====== PROCESSING ====== */
+#processingPage {
+  min-height: 100vh; display: none;
+  flex-direction: column; align-items: center; justify-content: center;
+  padding: 3rem 1.5rem; text-align: center;
+}
+
+.processing-icon { font-size: 4rem; margin-bottom: 2rem; animation: pulse 1.5s ease-in-out infinite; }
+@keyframes pulse { 0%,100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.1); opacity: 0.7; } }
+
+.processing-title { font-size: 1.8rem; font-weight: 800; margin-bottom: 0.5rem; }
+.processing-sub { color: var(--muted); font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; }
+
+.progress-bar-wrap {
+  width: 400px; max-width: 90vw; height: 4px;
+  background: var(--surface2); border-radius: 2px; margin: 2rem auto;
+  overflow: hidden;
+}
+.progress-bar-fill {
+  height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2));
+  border-radius: 2px; width: 0; transition: width 0.3s ease;
+}
+
+.processing-steps { display: flex; flex-direction: column; gap: 0.6rem; }
+.proc-step {
+  display: flex; align-items: center; gap: 0.8rem;
+  font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; color: var(--muted);
+  transition: color 0.3s;
+}
+.proc-step.active { color: var(--accent); }
+.proc-step.done { color: var(--green); }
+.proc-dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+
+/* ====== DASHBOARD ====== */
+#dashPage { display: none; padding: 2rem 1.5rem 4rem; max-width: 1400px; margin: 0 auto; }
+
+.dash-header {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  flex-wrap: wrap; gap: 1.5rem; margin-bottom: 2.5rem;
+}
+.dash-header-left .tag {
+  display: inline-block; background: rgba(255,107,43,0.1);
+  border: 1px solid rgba(255,107,43,0.3); color: var(--accent);
+  font-family: 'JetBrains Mono', monospace; font-size: 0.65rem;
+  letter-spacing: 0.15em; padding: 0.25rem 0.75rem; border-radius: 100px;
+  margin-bottom: 0.75rem; text-transform: uppercase;
+}
+.dash-header-left h2 { font-size: clamp(1.5rem, 3vw, 2.2rem); font-weight: 800; }
+.dash-header-left h2 span { color: var(--accent); }
+.dash-header-left .meta { color: var(--muted); font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; margin-top: 0.4rem; }
+
+.btn-row { display: flex; gap: 0.6rem; flex-wrap: wrap; }
+.btn-sm {
+  display: flex; align-items: center; gap: 0.4rem;
+  background: var(--surface2); border: 1px solid var(--border2);
+  color: var(--text); font-family: 'JetBrains Mono', monospace;
+  font-size: 0.7rem; padding: 0.55rem 1rem; border-radius: 8px;
+  cursor: pointer; transition: all 0.15s; text-transform: uppercase; letter-spacing: 0.05em;
+}
+.btn-sm:hover { border-color: var(--accent); color: var(--accent); }
+.btn-sm.primary { background: linear-gradient(135deg, var(--accent), #e85a1a); border-color: transparent; color: #fff; font-weight: 600; }
+.btn-sm.primary:hover { color: #fff; box-shadow: 0 4px 16px rgba(255,107,43,0.3); }
+.btn-sm svg { width: 13px; height: 13px; }
+
+/* Stats */
+.stats-row {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 1rem; margin-bottom: 2rem;
+}
+.stat-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px; padding: 1.2rem; position: relative; overflow: hidden;
+  animation: fadeUp 0.4s ease both;
+}
+.stat-card::after {
+  content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 2px;
+  background: var(--accent-color, var(--accent));
+}
+.stat-num { font-size: 2.2rem; font-weight: 800; line-height: 1; color: var(--accent-color, var(--text)); }
+.stat-label { font-size: 0.65rem; color: var(--muted); margin-top: 0.4rem; text-transform: uppercase; letter-spacing: 0.1em; font-family: 'JetBrains Mono', monospace; }
+
+/* Charts */
+.charts-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 2rem;
+}
+@media (max-width: 900px) { .charts-grid { grid-template-columns: 1fr; } }
+
+.chart-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 14px; padding: 1.5rem;
+  animation: fadeUp 0.5s ease both;
+}
+.chart-card.full { grid-column: 1 / -1; }
+.chart-card-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 1.2rem;
+}
+.chart-card-header h3 {
+  font-size: 0.8rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.1em; color: var(--muted);
+}
+.chart-wrap { position: relative; }
+
+/* Legend */
+.cat-legend { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1.8rem; }
+.leg {
+  display: flex; align-items: center; gap: 0.4rem;
+  background: var(--surface); border: 1px solid var(--border);
+  padding: 0.3rem 0.7rem; border-radius: 100px; font-size: 0.7rem;
+  cursor: pointer; transition: all 0.2s; user-select: none;
+}
+.leg:hover { border-color: var(--accent); }
+.leg.off { opacity: 0.3; }
+.leg-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.leg-count { color: var(--muted); font-family: 'JetBrains Mono', monospace; font-size: 0.62rem; margin-left: 2px; }
+
+/* Controls */
+.table-controls { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem; align-items: center; }
+.filter-btn {
+  background: var(--surface); border: 1px solid var(--border);
+  color: var(--muted); font-family: 'JetBrains Mono', monospace;
+  font-size: 0.65rem; padding: 0.4rem 0.8rem; border-radius: 100px;
+  cursor: pointer; transition: all 0.15s; text-transform: uppercase; letter-spacing: 0.06em;
+}
+.filter-btn:hover { border-color: var(--accent); color: var(--accent); }
+.filter-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 700; }
+.search-box {
+  flex: 1; min-width: 200px; background: var(--surface);
+  border: 1px solid var(--border); color: var(--text);
+  font-family: 'JetBrains Mono', monospace; font-size: 0.75rem;
+  padding: 0.45rem 1rem; border-radius: 8px; outline: none;
+  transition: border-color 0.15s;
+}
+.search-box:focus { border-color: var(--accent); }
+.search-box::placeholder { color: var(--muted); }
+
+/* Table section */
+.table-section {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 14px; overflow: hidden;
+  animation: fadeUp 0.6s ease both;
+}
+.table-top {
+  padding: 1rem 1.5rem; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.8rem;
+}
+.table-top h3 { font-size: 0.82rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); }
+.table-top-right { display: flex; align-items: center; gap: 0.6rem; }
+.count-pill {
+  background: var(--surface2); border: 1px solid var(--border2);
+  color: var(--accent); font-family: 'JetBrains Mono', monospace;
+  font-size: 0.68rem; padding: 0.2rem 0.7rem; border-radius: 100px;
+}
+
+.table-scroll { overflow-x: auto; max-height: 550px; overflow-y: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+thead { position: sticky; top: 0; z-index: 10; }
+thead th {
+  background: #0b0e16; padding: 0.7rem 1rem; text-align: left;
+  font-family: 'JetBrains Mono', monospace; font-size: 0.62rem;
+  text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted);
+  border-bottom: 1px solid var(--border); white-space: nowrap;
+}
+tbody tr { border-bottom: 1px solid #161b26; transition: background 0.1s; }
+tbody tr:hover { background: #161b26; }
+tbody td { padding: 0.7rem 1rem; vertical-align: top; }
+.td-idx { color: var(--muted); font-family: 'JetBrains Mono', monospace; font-size: 0.65rem; }
+.td-time { font-family: 'JetBrains Mono', monospace; color: var(--accent); font-size: 0.72rem; white-space: nowrap; }
+.td-name { font-weight: 600; white-space: nowrap; font-size: 0.76rem; max-width: 160px; overflow: hidden; text-overflow: ellipsis; }
+.td-msg { color: #b0b8cc; max-width: 380px; line-height: 1.5; font-size: 0.76rem; }
+.td-cats { min-width: 100px; }
+.cat-badges { display: flex; flex-wrap: wrap; gap: 0.25rem; }
+.cat-badge {
+  font-family: 'JetBrains Mono', monospace; font-size: 0.58rem;
+  padding: 0.15rem 0.45rem; border-radius: 8px; white-space: nowrap; font-weight: 600;
+}
+.no-results {
+  text-align: center; padding: 3rem; color: var(--muted);
+  font-family: 'JetBrains Mono', monospace; font-size: 0.8rem;
+}
+
+/* New analysis btn */
+.new-btn {
+  display: flex; align-items: center; gap: 0.5rem;
+  background: transparent; border: 1px solid var(--border2);
+  color: var(--muted); font-family: 'JetBrains Mono', monospace;
+  font-size: 0.68rem; padding: 0.4rem 0.9rem; border-radius: 8px;
+  cursor: pointer; transition: all 0.15s; text-transform: uppercase;
+}
+.new-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+
+/* Animations */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.stat-card:nth-child(1){animation-delay:.05s}
+.stat-card:nth-child(2){animation-delay:.10s}
+.stat-card:nth-child(3){animation-delay:.15s}
+.stat-card:nth-child(4){animation-delay:.20s}
+.stat-card:nth-child(5){animation-delay:.25s}
+.stat-card:nth-child(6){animation-delay:.30s}
+
+/* Drag overlay */
+.drag-overlay {
+  position: fixed; inset: 0; background: rgba(255,107,43,0.12);
+  border: 3px dashed var(--accent); border-radius: 16px; z-index: 1000;
+  display: none; align-items: center; justify-content: center;
+  font-size: 2rem; font-weight: 800; color: var(--accent);
+  backdrop-filter: blur(4px);
+}
+.drag-overlay.show { display: flex; }
+</style>
+</head>
+<body>
+
+<!-- ====== UPLOAD PAGE ====== -->
+<div id="uploadPage" class="page">
+  <div class="logo-area">
+    <div class="logo-tag">Workshop Analyzer</div>
+    <h1 class="hero">Chat Sentiment<br>Intelligence</h1>
+    <p class="hero-sub">Upload your workshop files · Get instant negative sentiment analysis<br>with charts, filters & downloadable reports</p>
+  </div>
+
+  <div class="upload-grid">
+    <div class="drop-zone" id="dz1" onclick="document.getElementById('f1').click()">
+      <input type="file" id="f1" accept=".vtt,.txt,.srt" onchange="handleFile(this,'transcript')">
+      <span class="dz-icon">🎙️</span>
+      <div class="dz-title">Workshop Transcript</div>
+      <div class="dz-sub">Drag & drop or click to browse</div>
+      <div class="dz-accepted">Accepts .vtt · .txt · .srt</div>
+      <div class="dz-filename" id="fn1" style="display:none"></div>
+    </div>
+
+    <div class="drop-zone" id="dz2" onclick="document.getElementById('f2').click()">
+      <input type="file" id="f2" accept=".txt,.csv" onchange="handleFile(this,'chat')">
+      <span class="dz-icon">💬</span>
+      <div class="dz-title">Zoom Saved Chat</div>
+      <div class="dz-sub">Drag & drop or click to browse</div>
+      <div class="dz-accepted">Accepts .txt · .csv</div>
+      <div class="dz-filename" id="fn2" style="display:none"></div>
+    </div>
+  </div>
+
+  <button class="analyze-btn" id="analyzeBtn" onclick="startAnalysis()" disabled>
+    <span>Analyze Workshop</span>
+    <span class="arrow">→</span>
+  </button>
+  <p class="upload-note">⚡ All processing happens in your browser — files never leave your device</p>
+</div>
+
+<!-- ====== PROCESSING PAGE ====== -->
+<div id="processingPage" class="page">
+  <div class="processing-icon">⚙️</div>
+  <div class="processing-title">Analyzing your workshop...</div>
+  <div class="processing-sub" id="procStatus">Parsing chat messages</div>
+  <div class="progress-bar-wrap"><div class="progress-bar-fill" id="progressFill"></div></div>
+  <div class="processing-steps" id="procSteps">
+    <div class="proc-step" id="step1"><div class="proc-dot"></div>Parsing zoom chat file</div>
+    <div class="proc-step" id="step2"><div class="proc-dot"></div>Extracting messages</div>
+    <div class="proc-step" id="step3"><div class="proc-dot"></div>Categorizing sentiment</div>
+    <div class="proc-step" id="step4"><div class="proc-dot"></div>Building timeline data</div>
+    <div class="proc-step" id="step5"><div class="proc-dot"></div>Rendering dashboard</div>
+  </div>
+</div>
+
+<!-- ====== DASHBOARD PAGE ====== -->
+<div id="dashPage" class="page">
+  <div class="dash-header">
+    <div class="dash-header-left">
+      <div class="tag">Negative Sentiment Report</div>
+      <h2>Workshop Chat <span>Analysis</span></h2>
+      <div class="meta" id="dashMeta">—</div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:0.6rem;align-items:flex-end">
+      <div class="btn-row">
+        <button class="btn-sm primary" onclick="downloadExcel()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+          Download Excel
+        </button>
+        <button class="btn-sm" onclick="downloadCSV()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+          Download CSV
+        </button>
+      </div>
+      <button class="new-btn" onclick="resetApp()">↩ New Analysis</button>
+    </div>
+  </div>
+
+  <div class="stats-row" id="statsRow"></div>
+  <div class="cat-legend" id="catLegend"></div>
+
+  <div class="charts-grid">
+    <div class="chart-card full">
+      <div class="chart-card-header">
+        <h3>📈 Negative Volume Over Time (15-min buckets)</h3>
+        <button class="btn-sm" onclick="downloadChart('timelineChart','timeline_chart')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+          PNG
+        </button>
+      </div>
+      <div class="chart-wrap" style="height:260px"><canvas id="timelineChart"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-card-header">
+        <h3>🍩 Category Breakdown</h3>
+        <button class="btn-sm" onclick="downloadChart('donutChart','category_breakdown')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+          PNG
+        </button>
+      </div>
+      <div class="chart-wrap" style="height:280px"><canvas id="donutChart"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-card-header">
+        <h3>🔥 Most Active Complainers</h3>
+        <button class="btn-sm" onclick="downloadChart('peopleChart','top_complainers')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+          PNG
+        </button>
+      </div>
+      <div class="chart-wrap" style="height:280px"><canvas id="peopleChart"></canvas></div>
+    </div>
+  </div>
+
+  <div class="table-controls">
+    <span style="font-size:0.68rem;color:var(--muted);font-family:'JetBrains Mono',monospace">FILTER:</span>
+    <button class="filter-btn active" data-cat="all" onclick="filterTable(this)">All</button>
+    <button class="filter-btn" data-cat="1" onclick="filterTable(this)">Technical</button>
+    <button class="filter-btn" data-cat="2" onclick="filterTable(this)">Recording</button>
+    <button class="filter-btn" data-cat="3" onclick="filterTable(this)">Marketing</button>
+    <button class="filter-btn" data-cat="4" onclick="filterTable(this)">Neg. Feedback</button>
+    <button class="filter-btn" data-cat="5" onclick="filterTable(this)">No Help</button>
+    <button class="filter-btn" data-cat="6" onclick="filterTable(this)">Promises</button>
+    <button class="filter-btn" data-cat="7" onclick="filterTable(this)">Payment</button>
+    <button class="filter-btn" data-cat="8" onclick="filterTable(this)">Too Fast</button>
+    <button class="filter-btn" data-cat="9" onclick="filterTable(this)">Impatience</button>
+    <input class="search-box" type="text" placeholder="Search by name or message..." oninput="searchTable(this.value)">
+  </div>
+
+  <div class="table-section">
+    <div class="table-top">
+      <h3>All Flagged Messages</h3>
+      <div class="table-top-right">
+        <div class="count-pill" id="rowCount">0 entries</div>
+        <button class="btn-sm" onclick="downloadFilteredCSV()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+          Export Filtered
+        </button>
+      </div>
+    </div>
+    <div class="table-scroll">
+      <table id="mainTable">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Timestamp</th>
+            <th>Name</th>
+            <th>Message</th>
+            <th>Category</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// STATE
+// ============================================================
+let files = { transcript: null, chat: null };
+let analysisData = [];
+let charts = {};
+let activeFilter = 'all';
+let searchQuery = '';
+let chatFileName = '';
+
+const CATS = {
+  1: { label: 'Technical Issues', color: '#ef4444', short: 'Tech' },
+  2: { label: 'Recording Query',  color: '#3b82f6', short: 'Rec'  },
+  3: { label: 'Marketing/Sales',  color: '#f59e0b', short: 'Mktg' },
+  4: { label: 'Negative Feedback',color: '#ec4899', short: 'Neg'  },
+  5: { label: 'No Help/Ignored',  color: '#8b5cf6', short: 'NoHelp'},
+  6: { label: 'Unfulfilled Promise',color:'#06b6d4', short: 'Promise'},
+  7: { label: 'Payment Issues',   color: '#22d3a0', short: 'Pay'  },
+  8: { label: 'Too Fast/Speed',   color: '#ff6b2b', short: 'Speed'},
+  9: { label: 'Impatience/Delay', color: '#a3e635', short: 'Wait' }
+};
+
+// ============================================================
+// UPLOAD
+// ============================================================
+function handleFile(input, type) {
+  const file = input.files[0];
+  if (!file) return;
+  files[type] = file;
+  if (type === 'transcript') {
+    document.getElementById('fn1').textContent = '✓ ' + file.name;
+    document.getElementById('fn1').style.display = 'block';
+    document.getElementById('dz1').classList.add('filled');
+  } else {
+    chatFileName = file.name;
+    document.getElementById('fn2').textContent = '✓ ' + file.name;
+    document.getElementById('fn2').style.display = 'block';
+    document.getElementById('dz2').classList.add('filled');
+  }
+  // Only chat is required
+  document.getElementById('analyzeBtn').disabled = !files.chat;
+}
+
+// Drag & drop
+['dz1','dz2'].forEach((id, i) => {
+  const dz = document.getElementById(id);
+  const type = i === 0 ? 'transcript' : 'chat';
+  const inputId = i === 0 ? 'f1' : 'f2';
+  dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('dragover'); });
+  dz.addEventListener('dragleave', () => dz.classList.remove('dragover'));
+  dz.addEventListener('drop', e => {
+    e.preventDefault(); dz.classList.remove('dragover');
+    const file = e.dataTransfer.files[0];
+    if (file) {
+      const input = document.getElementById(inputId);
+      const dt = new DataTransfer();
+      dt.items.add(file);
+      input.files = dt.files;
+      handleFile(input, type);
+    }
+  });
+});
+
+// ============================================================
+// ANALYSIS PIPELINE
+// ============================================================
+async function startAnalysis() {
+  showPage('processing');
+  await sleep(100);
+
+  // Step 1
+  await setStep(1, 'Parsing zoom chat file...');
+  const chatText = await readFile(files.chat);
+  await sleep(200);
+
+  // Step 2
+  await setStep(2, 'Extracting messages...');
+  const messages = parseChat(chatText);
+  await sleep(300);
+
+  // Step 3
+  await setStep(3, `Categorizing ${messages.length} messages...`);
+  analysisData = categorize(messages);
+  await sleep(400);
+
+  // Step 4
+  await setStep(4, 'Building timeline data...');
+  await sleep(200);
+
+  // Step 5
+  await setStep(5, 'Rendering dashboard...');
+  await sleep(200);
+
+  buildDashboard();
+  showPage('dash');
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+async function setStep(n, msg) {
+  for (let i = 1; i < n; i++) {
+    document.getElementById('step'+i).className = 'proc-step done';
+  }
+  document.getElementById('step'+n).className = 'proc-step active';
+  document.getElementById('procStatus').textContent = msg;
+  document.getElementById('progressFill').style.width = (n / 5 * 100) + '%';
+  await sleep(50);
+}
+
+function readFile(file) {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = e => res(e.target.result);
+    r.onerror = rej;
+    r.readAsText(file, 'utf-8');
+  });
+}
+
+// ============================================================
+// PARSER
+// ============================================================
+function parseChat(text) {
+  const messages = [];
+  // Match: HH:MM:SS From Name to Hosts/Everyone:
+  const pattern = /(\d{2}:\d{2}:\d{2})\s+From\s+(.+?)\s+to\s+(?:Hosts and panelists|Everyone|Panelists):\s*\n\t?([\s\S]*?)(?=\n\d{2}:\d{2}:\d{2}\s+From|\s*$)/gi;
+  let m;
+  while ((m = pattern.exec(text)) !== null) {
+    const time = m[1];
+    const name = m[2].trim();
+    const msg = m[3].trim().replace(/\t/g, ' ');
+    if (msg && name !== 'Team AIforTechies' && !name.includes('AIforTechies')) {
+      messages.push({ time, name, msg });
+    }
+  }
+  return messages;
+}
+
+// ============================================================
+// CATEGORIZER
+// ============================================================
+function categorize(messages) {
+  const results = [];
+
+  messages.forEach(m => {
+    const ml = m.msg.toLowerCase();
+    const cats = new Set();
+
+    // CAT 1 – Technical Issues
+    if (/(not\s+audible|audio\s+not\s+clear|audio\s+poor|poor\s+audio|no\s+sound|no\s+audio|voice\s+not|can'?t\s+hear|cannot\s+hear|cant\s+hear|not\s+hear|blurr?y?|screen\s+is\s+blur|blur\s+screen|video\s+not\s+clear|not\s+clear|not\s+visible|not\s+showing|screen\s+share\s+isn'?t|stuck\.|voice.*stuck|echoing|^echo$|audio.*echo|poor\s+internet.*disconnected|disconnected|not\s+working|link\s+is\s+not\s+working|no\s+response|connection\s+was\s+lost|screen.*not\s+clear|not\s+clearly\s+visible)/i.test(m.msg)) {
+      // Exclude city names
+      if (!/(hyderabad|ahmedabad|faridabad|ghaziabad|aurangabad)/i.test(m.msg)) {
+        cats.add(1);
+      }
+    }
+
+    // CAT 2 – Recording queries
+    if (/(is\s+it\s+recorded|is\s+this\s+recorded|recorded\s+session|get\s+recording|session\s+recorded|recorded\s+video|pre\s*recorded|already\s+recorded|recording\s+be\s+shared|share\s+recording|recording\s+of\s+this|recording\s+available|will\s+.*\s+recording|this\s+a\s+recorded|not\s+a\s+live\s+one|is\s+this\s+a\s+record|get\s+recorded|recorded\s+lectures|recording\s+if\s+we|recording\s+because\s+i\s+missed|will\s+recording\s+be)/i.test(m.msg)) {
+      cats.add(2);
+    }
+
+    // CAT 3 – Marketing / Sales complaints
+    if (/(only\s+selling|just\s+selling|more\s+promotional|promoting\s+your\s+course|marketing\s+anno|is\s+it.*marketing|marketing\s+instead|promotional\s+activity|advertisement|selling\s+your|selling\s+product|selling\s+course|selling\s+the\s+course|selling\s+all\s+this|selling\s+one\s+another|u\s+r\s+selling|you\s+are\s+selling|this\s+is\s+a\s+scam|why\s+are\s+you\s+scamm|reply\s+scammers|what\s+a\s+scam|getting\s+dragged|only\s+selling|promotional\s+webinar|making\s+fool\s+of|don'?t\s+make\s+fool)/i.test(m.msg)) {
+      cats.add(3);
+    }
+
+    // CAT 4 – Negative feedback / abuses / dissatisfaction
+    if (/(not\s+worth\s+it|very\s+bad|worst\s+prog|worst\s+course|useless\s+course|disappointed|deeply\s+disappointed|presentation\s+is\s+pathe|pathetic|waste\s+of\s+time|wasted\s+my\s+time|wasted\s+time|shitt|bad\s+experience|very\s+bad\s+experience|false\s+information|scamm|stick\s+to\s+what\s+you\s+say|python\s+coding\s+is\s+not\s+taught|0\/10|however\s+0\b|this\s+is\s+not\s+good|not\s+good\b|bakwaas|bekar|not\s+useful|useless|nowhere\s+related|no\s+where\s+related|this\s+is\s+bad|hindi\s+is\s+being\s+used|conduct\s+the\s+course\s+primarily)/i.test(m.msg)) {
+      cats.add(4);
+    }
+
+    // CAT 5 – No help / unanswered
+    if (/(not\s+answered|no\s+one\s+is\s+helping|no\s+one\s+here\s+is\s+answering|no\s+response\s*$|not\s+getting\s+any\s+replies|no\s+one\s+reply|two\s+hours\s+ho\s+gaya|approx.*no\s+one|please\s+answer\s+my\s+query|can\s+someone\s+answer|not\s+helping|nobody\s+answering|answer\s+my\s+question|i\s+hope\s+this\s+question\s+will\s+be\s+an|please\s+reply\s*$)/i.test(m.msg)) {
+      cats.add(5);
+    }
+
+    // CAT 6 – Unfulfilled promises
+    if (/(where\s+is\s+iphone|iphone\s+lucky|lucky\s+draw|where\s+is\s+the\s+30\s+day\s+camp|what\s+about\s+the\s+lucky\s+draw|where\s+is\s+the\s+30\s+days?\s+camp|promised.*note|as\s+you\s+promised)/i.test(m.msg)) {
+      cats.add(6);
+    }
+
+    // CAT 7 – Payment issues
+    if (/(i\s+have\s+paid|i'?ve\s+paid|already\s+paid|i\s+paid\s+(but|rs|for|and)|paid\s+rs\.?|paid\s+but|no\s+course\s+content|not\s+get\s+any\s+course|not\s+received\s+any\s+course|want\s+refund|i\s+would\s+like\s+a\s+refund|give\s+me\s+a\s+refund|any\s+chance\s+i\s+can\s+get\s+a\s+refund|money\s+back|no\s+confirmation|not\s+confirmed|mobile\s+number\s+is\s+mistake|account\s+does\s+not\s+exist|unable\s+to\s+log\s+in|not\s+got\s+any\s+acknowledge|payment\s+done.*seeking|paid\s+2[0-9]{3})/i.test(m.msg)) {
+      cats.add(7);
+    }
+
+    // CAT 8 – Too fast / speed
+    if (/(go\s+slow|speak\s+slow|talk\s+slow|bit\s+slow|little\s+slow|please\s+slow|slowly\s+(sir|please)|too\s+fast|very\s+fast|going\s+too\s+fast|slow\s+down|go\s+bit\s+slow|please\s+be\s+slow|slowly\s+pls|pls\s+go\s+slow|going\s+fast|its?\s+too\s+fast|explanation\s+is\s+too\s+fast)/i.test(m.msg)) {
+      cats.add(8);
+    }
+
+    // CAT 9 – Impatience / delay
+    if (/(please\s+start\s*$|when\s+will\s+it\s+start|when\s+will\s+this\s+start|when\s+will\s+the\s+class\s+start|don'?t\s+waste\s+time|wasting\s+time|still\s+waiting|waiting\s+long|hour\s+of\s+advertisements|when\s+will\s+this\s+end|when\s+does\s+this\s+class\s+start|when\s+will\s+i\s+get\s+the\s+notes)/i.test(m.msg)) {
+      cats.add(9);
+    }
+
+    if (cats.size > 0) {
+      results.push({ ...m, categories: [...cats] });
+    }
+  });
+
+  return results;
+}
+
+// ============================================================
+// DASHBOARD
+// ============================================================
+function buildDashboard() {
+  // Meta
+  const names = new Set(analysisData.map(d => d.name));
+  document.getElementById('dashMeta').textContent =
+    `// ${chatFileName} · ${analysisData.length} flagged messages · ${names.size} unique participants`;
+
+  // Category counts
+  const catCounts = {};
+  Object.keys(CATS).forEach(k => catCounts[k] = 0);
+  analysisData.forEach(d => d.categories.forEach(c => catCounts[c]++));
+
+  // Stats
+  const statsRow = document.getElementById('statsRow');
+  statsRow.innerHTML = '';
+  const statsCfg = [
+    { num: analysisData.length, label: 'Flagged Messages', color: '#ff6b2b' },
+    { num: names.size, label: 'Unique Participants', color: '#ec4899' },
+    { num: catCounts[1], label: 'Tech / Audio / Blur', color: '#ef4444' },
+    { num: catCounts[3] + catCounts[4], label: 'Complaints & Scam', color: '#f59e0b' },
+    { num: catCounts[7], label: 'Payment Issues', color: '#22d3a0' },
+    { num: catCounts[8], label: 'Too Fast Complaints', color: '#ff6b2b' },
+  ];
+  statsCfg.forEach(s => {
+    const div = document.createElement('div');
+    div.className = 'stat-card';
+    div.style.setProperty('--accent-color', s.color);
+    div.innerHTML = `<div class="stat-num" style="color:${s.color}">${s.num}</div><div class="stat-label">${s.label}</div>`;
+    statsRow.appendChild(div);
+  });
+
+  // Legend
+  const legend = document.getElementById('catLegend');
+  legend.innerHTML = '';
+  Object.entries(CATS).forEach(([k, v]) => {
+    const div = document.createElement('div');
+    div.className = 'leg';
+    div.dataset.cat = k;
+    div.innerHTML = `<div class="leg-dot" style="background:${v.color}"></div>${v.label}<span class="leg-count">(${catCounts[k]})</span>`;
+    legend.appendChild(div);
+  });
+
+  // Destroy old charts
+  Object.values(charts).forEach(c => c.destroy());
+  charts = {};
+
+  buildCharts(catCounts);
+  renderTable();
+}
+
+function buildCharts(catCounts) {
+  // Timeline
+  const minStart = getMinutes(analysisData[0]?.time || '11:00:00');
+  const minEnd = getMinutes(analysisData[analysisData.length-1]?.time || '14:30:00');
+
+  // Build buckets
+  const buckets = {};
+  for (let m = Math.floor(minStart/15)*15; m <= Math.ceil(minEnd/15)*15; m += 15) {
+    buckets[m] = {};
+    Object.keys(CATS).forEach(k => buckets[m][k] = 0);
+  }
+  analysisData.forEach(d => {
+    const bk = Math.floor(getMinutes(d.time) / 15) * 15;
+    if (buckets[bk]) d.categories.forEach(c => buckets[bk][c]++);
+  });
+
+  const bucketKeys = Object.keys(buckets).map(Number).sort((a,b)=>a-b);
+  const timeLabels = bucketKeys.map(b => {
+    const h = Math.floor(b / 60); const mn = b % 60;
+    return `${h}:${mn.toString().padStart(2,'0')}`;
+  });
+
+  const tlCtx = document.getElementById('timelineChart').getContext('2d');
+  charts.timeline = new Chart(tlCtx, {
+    type: 'bar',
+    data: {
+      labels: timeLabels,
+      datasets: Object.entries(CATS).map(([k, v]) => ({
+        label: v.label,
+        data: bucketKeys.map(b => buckets[b][k] || 0),
+        backgroundColor: v.color + 'bb',
+        borderColor: v.color,
+        borderWidth: 1,
+        borderRadius: 3,
+      }))
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { mode: 'index' }
+      },
+      scales: {
+        x: { stacked: true, ticks: { color: '#5a6280', font: { family: 'JetBrains Mono', size: 9 } }, grid: { color: '#161b26' } },
+        y: { stacked: true, ticks: { color: '#5a6280', font: { family: 'JetBrains Mono', size: 9 } }, grid: { color: '#161b26' } }
+      }
+    }
+  });
+
+  // Donut
+  const dCtx = document.getElementById('donutChart').getContext('2d');
+  charts.donut = new Chart(dCtx, {
+    type: 'doughnut',
+    data: {
+      labels: Object.values(CATS).map(v => v.label),
+      datasets: [{
+        data: Object.keys(CATS).map(k => catCounts[k]),
+        backgroundColor: Object.values(CATS).map(v => v.color + 'bb'),
+        borderColor: Object.values(CATS).map(v => v.color),
+        borderWidth: 2, hoverOffset: 8
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, cutout: '62%',
+      plugins: {
+        legend: {
+          position: 'right',
+          labels: { color: '#8892a4', font: { family: 'JetBrains Mono', size: 9 }, padding: 8, boxWidth: 10 }
+        }
+      }
+    }
+  });
+
+  // People bar
+  const nameCounts = {};
+  analysisData.forEach(d => { nameCounts[d.name] = (nameCounts[d.name]||0)+1; });
+  const top = Object.entries(nameCounts).sort((a,b)=>b[1]-a[1]).slice(0,12);
+
+  const pCtx = document.getElementById('peopleChart').getContext('2d');
+  charts.people = new Chart(pCtx, {
+    type: 'bar',
+    data: {
+      labels: top.map(p => p[0].length > 18 ? p[0].slice(0,16)+'…' : p[0]),
+      datasets: [{
+        data: top.map(p => p[1]),
+        backgroundColor: top.map((_,i) => Object.values(CATS)[i % 9].color + 'bb'),
+        borderColor: top.map((_,i) => Object.values(CATS)[i % 9].color),
+        borderWidth: 1, borderRadius: 4
+      }]
+    },
+    options: {
+      indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: '#5a6280', font: { family: 'JetBrains Mono', size: 9 } }, grid: { color: '#161b26' } },
+        y: { ticks: { color: '#c8d0e4', font: { family: 'JetBrains Mono', size: 9 } }, grid: { color: '#161b26' } }
+      }
+    }
+  });
+}
+
+function getMinutes(t) {
+  if (!t) return 0;
+  const [h, m, s] = t.split(':').map(Number);
+  return h * 60 + m;
+}
+
+// ============================================================
+// TABLE
+// ============================================================
+function getFiltered() {
+  return analysisData.filter(d => {
+    const catMatch = activeFilter === 'all' || d.categories.includes(+activeFilter);
+    const q = searchQuery.toLowerCase();
+    const searchMatch = !q || d.name.toLowerCase().includes(q) || d.msg.toLowerCase().includes(q);
+    return catMatch && searchMatch;
+  });
+}
+
+function renderTable() {
+  const filtered = getFiltered();
+  document.getElementById('rowCount').textContent = `${filtered.length} entries`;
+  const tbody = document.getElementById('tableBody');
+
+  if (!filtered.length) {
+    tbody.innerHTML = '<tr><td colspan="5" class="no-results">No messages found</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = filtered.map((d, i) => {
+    const badges = d.categories.map(c => {
+      const cat = CATS[c];
+      return `<span class="cat-badge" style="background:${cat.color}20;color:${cat.color};border:1px solid ${cat.color}40">${cat.short}</span>`;
+    }).join('');
+    return `<tr>
+      <td class="td-idx">${i+1}</td>
+      <td class="td-time">${d.time}</td>
+      <td class="td-name" title="${esc(d.name)}">${esc(d.name)}</td>
+      <td class="td-msg">${esc(d.msg)}</td>
+      <td class="td-cats"><div class="cat-badges">${badges}</div></td>
+    </tr>`;
+  }).join('');
+}
+
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function filterTable(btn) {
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  activeFilter = btn.dataset.cat;
+  renderTable();
+}
+
+function searchTable(val) {
+  searchQuery = val;
+  renderTable();
+}
+
+// ============================================================
+// DOWNLOADS
+// ============================================================
+function getExportRows(data) {
+  return data.map((d, i) => ({
+    '#': i + 1,
+    'Timestamp': d.time,
+    'Name': d.name,
+    'Message': d.msg,
+    'Categories': d.categories.map(c => CATS[c].label).join(', '),
+    'Category Codes': d.categories.join(', ')
+  }));
+}
+
+function downloadCSV() {
+  const rows = getExportRows(analysisData);
+  csvDownload(rows, 'workshop_negative_chat_analysis.csv');
+}
+
+function downloadFilteredCSV() {
+  const rows = getExportRows(getFiltered());
+  const catLabel = activeFilter === 'all' ? 'all' : CATS[activeFilter]?.short || activeFilter;
+  csvDownload(rows, `workshop_chat_${catLabel}.csv`);
+}
+
+function csvDownload(rows, filename) {
+  const headers = Object.keys(rows[0]);
+  const lines = [headers.join(',')];
+  rows.forEach(r => {
+    lines.push(headers.map(h => {
+      const v = String(r[h] ?? '').replace(/"/g, '""');
+      return `"${v}"`;
+    }).join(','));
+  });
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+  triggerDownload(blob, filename);
+}
+
+function downloadExcel() {
+  const rows = getExportRows(analysisData);
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.json_to_sheet(rows);
+
+  // Column widths
+  ws['!cols'] = [
+    { wch: 5 }, { wch: 12 }, { wch: 28 }, { wch: 65 }, { wch: 30 }, { wch: 15 }
+  ];
+
+  // Header row styling (SheetJS CE doesn't support full style, but set anyway)
+  XLSX.utils.book_append_sheet(wb, ws, 'Negative Chat Analysis');
+
+  // Summary sheet
+  const catCounts = {};
+  Object.keys(CATS).forEach(k => catCounts[k] = 0);
+  analysisData.forEach(d => d.categories.forEach(c => catCounts[c]++));
+
+  const summary = Object.entries(CATS).map(([k,v]) => ({
+    'Category': v.label,
+    'Code': v.short,
+    'Count': catCounts[k]
+  }));
+  summary.unshift({'Category': 'TOTAL FLAGGED', 'Code': '-', 'Count': analysisData.length});
+
+  const ws2 = XLSX.utils.json_to_sheet(summary);
+  ws2['!cols'] = [{ wch: 30 }, { wch: 10 }, { wch: 10 }];
+  XLSX.utils.book_append_sheet(wb, ws2, 'Summary');
+
+  XLSX.writeFile(wb, 'workshop_negative_chat_analysis.xlsx');
+}
+
+function downloadChart(canvasId, filename) {
+  const canvas = document.getElementById(canvasId);
+  // Draw on white background
+  const tmpCanvas = document.createElement('canvas');
+  tmpCanvas.width = canvas.width;
+  tmpCanvas.height = canvas.height;
+  const ctx = tmpCanvas.getContext('2d');
+  ctx.fillStyle = '#0f1219';
+  ctx.fillRect(0, 0, tmpCanvas.width, tmpCanvas.height);
+  ctx.drawImage(canvas, 0, 0);
+  const link = document.createElement('a');
+  link.download = filename + '.png';
+  link.href = tmpCanvas.toDataURL('image/png');
+  link.click();
+}
+
+function triggerDownload(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// ============================================================
+// PAGE TRANSITIONS
+// ============================================================
+function showPage(name) {
+  document.getElementById('uploadPage').style.display = 'none';
+  document.getElementById('processingPage').style.display = 'none';
+  document.getElementById('dashPage').style.display = 'none';
+
+  if (name === 'upload') {
+    document.getElementById('uploadPage').style.display = 'flex';
+  } else if (name === 'processing') {
+    document.getElementById('processingPage').style.display = 'flex';
+  } else if (name === 'dash') {
+    document.getElementById('dashPage').style.display = 'block';
+  }
+}
+
+function resetApp() {
+  files = { transcript: null, chat: null };
+  analysisData = [];
+  chatFileName = '';
+  activeFilter = 'all';
+  searchQuery = '';
+  document.getElementById('f1').value = '';
+  document.getElementById('f2').value = '';
+  document.getElementById('fn1').style.display = 'none';
+  document.getElementById('fn2').style.display = 'none';
+  document.getElementById('dz1').classList.remove('filled');
+  document.getElementById('dz2').classList.remove('filled');
+  document.getElementById('analyzeBtn').disabled = true;
+  // Reset steps
+  for (let i = 1; i <= 5; i++) {
+    document.getElementById('step'+i).className = 'proc-step';
+  }
+  document.getElementById('progressFill').style.width = '0';
+  showPage('upload');
+}
+
+// Init
+showPage('upload');
+</script>
+</body>
+</html>
