@@ -48,6 +48,15 @@ input[type=file]{display:none;}
 .analyze-btn:hover .arrow{transform:translateX(4px);}
 .upload-note{margin-top:1.2rem;color:var(--muted);font-family:'JetBrains Mono',monospace;font-size:.68rem;text-align:center;}
 
+/* Admin names field */
+.admin-field-wrap{width:100%;max-width:820px;margin-bottom:1.5rem;}
+.admin-field-label{display:flex;align-items:center;gap:.5rem;font-family:'JetBrains Mono',monospace;font-size:.68rem;color:var(--muted);margin-bottom:.5rem;text-transform:uppercase;letter-spacing:.08em;}
+.admin-field-label span{background:rgba(255,107,43,.12);border:1px solid rgba(255,107,43,.25);color:var(--accent);padding:.1rem .45rem;border-radius:4px;font-size:.58rem;}
+.admin-input{width:100%;background:var(--surface);border:1px solid var(--border2);color:var(--text);font-family:'JetBrains Mono',monospace;font-size:.75rem;padding:.6rem 1rem;border-radius:10px;outline:none;transition:border-color .15s;}
+.admin-input:focus{border-color:var(--accent);}
+.admin-input::placeholder{color:var(--muted);}
+.admin-hint{font-size:.62rem;color:var(--muted);font-family:'JetBrains Mono',monospace;margin-top:.4rem;}
+
 /* ─── PROCESSING ─── */
 #processingPage{min-height:100vh;display:none;flex-direction:column;align-items:center;justify-content:center;padding:3rem 1.5rem;text-align:center;}
 .processing-icon{font-size:4rem;margin-bottom:2rem;animation:pulse 1.5s ease-in-out infinite;}
@@ -191,6 +200,15 @@ tbody td{padding:.65rem .9rem;vertical-align:top;}
     </div>
   </div>
 
+  <div class="admin-field-wrap">
+    <div class="admin-field-label">
+      🚫 Admin / Host names to exclude <span>Optional</span>
+    </div>
+    <input class="admin-input" id="adminNames" type="text"
+      placeholder="e.g.  Aditya Be10x, Team AIforTechies, Prof. Vinny Arora">
+    <div class="admin-hint">Separate with commas · Matched case-insensitively · Prevents host/admin broadcast messages from being wrongly flagged as negative</div>
+  </div>
+
   <button class="analyze-btn" id="analyzeBtn" onclick="startAnalysis()" disabled>
     <span>Analyze Workshop</span><span class="arrow">→</span>
   </button>
@@ -329,6 +347,7 @@ let charts         = {};
 let activeFilter   = 'all';
 let searchQuery    = '';
 let hasTranscript  = false;
+let adminNamesList = [];   // lowercase admin/host names to exclude
 
 const CATS = {
   1:{ label:'Technical Issues',    color:'#ef4444', short:'Tech'    },
@@ -384,6 +403,10 @@ function handleFile(input, type) {
 async function startAnalysis() {
   showPage('processing');
   await sleep(80);
+
+  // Read admin names from input
+  const rawAdminNames = document.getElementById('adminNames').value;
+  adminNamesList = rawAdminNames.split(',').map(n=>n.trim().toLowerCase()).filter(n=>n.length>0);
 
   // Step 1 – Parse chat
   await setStep(1, 'Parsing zoom chat file…');
@@ -555,7 +578,11 @@ function parseChat(text) {
   let m;
   while ((m=pattern.exec(text))!==null) {
     const name = m[2].trim();
+    const nameLower = name.toLowerCase();
+    // Skip hardcoded platform bot names
     if (/AIforTechies|Team AIfor/i.test(name)) continue;
+    // Skip user-supplied admin / host names
+    if (adminNamesList.length > 0 && adminNamesList.some(a => nameLower.includes(a) || a.includes(nameLower.split(' ')[0]))) continue;
     const msg = m[3].trim().replace(/\t/g,' ');
     if (msg) msgs.push({ time:m[1], name, msg });
   }
@@ -570,10 +597,53 @@ function categorize(messages) {
     const ml = m.msg.toLowerCase();
     const cats = new Set();
 
-    // 1 – Technical
-    if (/(not\s+audible|audio\s+not\s+clear|audio\s+poor|poor\s+audio|no\s+sound|no\s+audio|voice\s+not|can'?t\s+hear|cannot\s+hear|cant\s+hear|not\s+hear|blurr?y?|screen\s+(is\s+)?blur|blur\s+screen|video\s+not\s+clear|not\s+clear\b|not\s+visible|not\s+showing|screen\s+share\s+isn'?t|voice.*stuck|^echo$|echoing|audio.*echo|poor\s+internet.*disconnect|disconnect|not\s+working|link\s+is\s+not\s+working|^no\s+response$|connection\s+(was\s+)?lost|not\s+clearly\s+visible|screen.*not\s+clear|video.*blur|display.*blur|blurred\s+picture)/i.test(m.msg)) {
-      if (!/(hyderabad|ahmedabad|faridabad|ghaziabad|aurangabad|bad\s+news|badminton)/i.test(m.msg)) cats.add(1);
-    }
+    // 1 – Technical Issues
+    // NOTE: We carefully avoid flagging:
+    //  - "if the previous link is not working" (admin offering alt link)
+    //  - "not working" alone without audio/video/screen context
+    //  - "not clear" without audio/video/screen context
+    const isTech = (() => {
+      const msg = m.msg;
+      const ml = msg.toLowerCase();
+      // Hard exclusion: message is an admin offering an alternative link
+      if (/if\s+(the\s+)?previous\s+link|alternative\s+(payment\s+)?link/i.test(msg)) return false;
+      // Hard exclusion: promo broadcast (contains payment/booking URL)
+      if (/https?:\/\/(pay\.|book\.stripe|checkout|payment)/i.test(msg)) return false;
+      // Hard exclusion: city names wrongly matching "bad"
+      if (/(hyderabad|ahmedabad|faridabad|ghaziabad|aurangabad|badminton|bad\s+news)/i.test(msg)) return false;
+      // Specific technical complaint patterns
+      return (
+        /not\s+audible/i.test(msg) ||
+        /audio\s+not\s+clear/i.test(msg) ||
+        /audio\s+poor|poor\s+audio/i.test(msg) ||
+        /no\s+sound|no\s+audio/i.test(msg) ||
+        /voice\s+not\s+(audible|clear|coming)/i.test(msg) ||
+        /can'?t\s+hear|cannot\s+hear|cant\s+hear/i.test(msg) ||
+        /blurr?y?\b/i.test(msg) ||
+        /screen\s+(is\s+)?blur|blur\s+screen/i.test(msg) ||
+        /video\s+not\s+clear/i.test(msg) ||
+        /screen.*not\s+clear|not\s+clear.*screen/i.test(msg) ||
+        /audio.*not\s+clear|not\s+clear.*audio/i.test(msg) ||
+        /screen.*not\s+visible|not\s+visible.*screen/i.test(msg) ||
+        /not\s+showing\s+clearly/i.test(msg) ||
+        /screen\s+share\s+isn'?t\s+clear/i.test(msg) ||
+        /voice.*stuck|audio.*stuck/i.test(msg) ||
+        /^echo$|echoing|audio.*echo/i.test(msg) ||
+        /poor\s+internet.*disconnect|got\s+disconnected/i.test(msg) ||
+        /connection\s+(was\s+)?lost/i.test(msg) ||
+        /^no\s+response$/i.test(msg) ||
+        /not\s+clearly\s+visible/i.test(msg) ||
+        /video.*blur|display.*blur/i.test(msg) ||
+        /blurred\s+picture/i.test(msg) ||
+        // "not working" only when about specific tech things (mic/audio/video/link they're complaining about)
+        /(mic|microphone|audio|video|sound|zoom|screen|app|bot|link).*not\s+working/i.test(msg) ||
+        /not\s+working.*(mic|microphone|audio|video|sound|zoom|screen)/i.test(msg) ||
+        // "link is not working" as a standalone complaint (not as alternative offer)
+        (/link\s+is\s+not\s+working/i.test(msg) && !/if.*link|alternative/i.test(msg)) ||
+        /no\s+sound/i.test(msg)
+      );
+    })();
+    if (isTech) cats.add(1);
 
     // 2 – Recording
     if (/(is\s+it\s+recorded|is\s+this\s+recorded|recorded\s+session|get\s+recording|session\s+recorded|recorded\s+video|pre\s*recorded|already\s+recorded|recording\s+be\s+shared|share\s+recording|recording\s+of\s+this|recording\s+available|will\s+.*\s+recording|this\s+a\s+recorded|not\s+a\s+live\s+one|is\s+this\s+a\s+record|get\s+recorded|recorded\s+lectures|will\s+recording\s+be|this\s+recorded\s*\?|is\s+it\s+a\s+recorded)/i.test(m.msg)) cats.add(2);
@@ -917,6 +987,8 @@ function resetApp(){
   chatFileName=''; transcriptFileName='';
   activeFilter='all'; searchQuery='';
   ['f1','f2'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('adminNames').value = '';
+  adminNamesList = [];
   ['fn1','fn2'].forEach(id=>{document.getElementById(id).style.display='none';});
   ['dz1','dz2'].forEach(id=>document.getElementById(id).classList.remove('filled'));
   document.getElementById('analyzeBtn').disabled=true;
